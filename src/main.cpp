@@ -24,12 +24,37 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 #include <BLE2902.h>
+#include <string>
 
 BLEServer *pServer = NULL;
 BLECharacteristic *pTxCharacteristic;
 bool deviceConnected = false;
 bool oldDeviceConnected = false;
 uint8_t txValue = 0;
+String resStr;
+String chipId;
+String readString;
+
+int pb = 4; // pushbutton
+int rled1 = 12;
+int rled2 = 13;
+int rled3 = 14;
+int rled4 = 15;
+int rled5 = 16;
+
+int gled1 = 17;
+int gled2 = 18;
+int gled3 = 19;
+int gled4 = 21;
+int gled5 = 22;
+
+int bled1 = 23;
+int bled2 = 25;
+int bled3 = 26;
+int bled4 = 27;
+int bled5 = 32;
+
+int pbCounter = 0;
 
 // String chipId;
 //  See the following for generating UUIDs:
@@ -44,15 +69,22 @@ class MyServerCallbacks : public BLEServerCallbacks
   void onConnect(BLEServer *pServer)
   {
     deviceConnected = true;
+    oldDeviceConnected = deviceConnected;
   };
 
   void onDisconnect(BLEServer *pServer)
   {
+    Serial.println("蓝牙断开");
     deviceConnected = false;
+    if (!deviceConnected && oldDeviceConnected)
+    {
+      delay(500);                  // give the bluetooth stack the chance to get things ready
+      pServer->startAdvertising(); // restart advertising
+      Serial.println("start advertising");
+      oldDeviceConnected = deviceConnected;
+    }
   }
 };
-String resStr;
-String chipId;
 class MyCallbacks : public BLECharacteristicCallbacks
 {
   void onWrite(BLECharacteristic *pCharacteristic)
@@ -61,7 +93,6 @@ class MyCallbacks : public BLECharacteristicCallbacks
 
     if (rxValue.length() > 0)
     {
-      Serial.println("*********");
       Serial.print("Received Value: ");
       for (int i = 0; i < rxValue.length(); i++)
       {
@@ -69,32 +100,59 @@ class MyCallbacks : public BLECharacteristicCallbacks
         resStr += rxValue[i];
       }
       Serial.println();
-      Serial.println("*********");
       if (resStr == "getid")
       {
-        pTxCharacteristic->setValue(chipId.c_str());
+        //Serial.println("发送ID");
+        //pTxCharacteristic->setValue(chipId.c_str());
+        //pTxCharacteristic->notify();
+
+      }
+      else if (resStr == "get_pbCounter")
+      {
+        String pbCounter_text = "pbCounter=" + String(pbCounter);
+        pTxCharacteristic->setValue(pbCounter_text.c_str());
         pTxCharacteristic->notify();
       }
-      else if (resStr == "light1on")
+      else if (resStr == "power_on")
       {
-        Serial.println("Activate: light 1");
+        pbCounter = 1;
+        
+        Serial.println("当前状态：电源开，切换至照明模式");
       }
-      else if (resStr == "light1off")
+      else if (resStr == "power_off")
       {
-        Serial.println("Deactivate: light 1");
+        pbCounter = 0;
+        
+        Serial.println("当前状态：电源关，切换至待机模式");
       }
-      else if (resStr == "light2on")
+      else if (resStr == "mode_lit")
       {
-        Serial.println("Activate: light 2");
+        pbCounter = 1;
+        
+        Serial.println("当前状态：切换至照明模式");
       }
-      else if (resStr == "light2off")
+      else if (resStr == "mode_atm")
       {
-        Serial.println("Deactivate: light 2");
+        pbCounter = 2;
+        
+        Serial.println("当前状态：切换至氛围模式");
       }
       resStr = "";
     }
   }
 };
+
+void ModeSwitch()
+{
+  detachInterrupt(pb);
+  // while(digitalRead(pb) == HIGH);
+  Serial.println("OnePress");
+  pbCounter++;
+  pbCounter = pbCounter % 3;
+  Serial.println(pbCounter);
+  delay(50); //冷却时间还需商榷
+  attachInterrupt(pb, ModeSwitch, RISING);
+}
 
 void setup()
 {
@@ -133,42 +191,110 @@ void setup()
   // Start advertising
   pServer->getAdvertising()->start();
   Serial.println("Waiting a client connection to notify...");
+
+  pinMode(pb, INPUT_PULLUP);
+  attachInterrupt(pb, ModeSwitch, RISING); //中断——按键监听
+
+  for (int i = 12; i <= 27; i++)
+  {
+    if (i == 20 || i == 24)
+      continue;
+    pinMode(i, OUTPUT);
+    digitalWrite(i, LOW);
+  }
+  pinMode(32, OUTPUT);
+  digitalWrite(32, LOW);
 }
-String readString;
+
+
 void loop()
 {
-
-  if (deviceConnected)
+  if (pbCounter == 0)
   {
-    //        pTxCharacteristic->setValue(&txValue, 1);
-    //        pTxCharacteristic->notify();
-    //        txValue++;
-    //    delay(10); // bluetooth stack will go into congestion, if too many packets are sent
-  }
-  while (Serial.available() > 0)
-  {
-    if (deviceConnected)
+    for (int i = 12; i <= 27; i++)
     {
-      delay(3);
-      readString += Serial.read();
-      pTxCharacteristic->setValue(chipId.c_str());
-      //      pTxCharacteristic->setValue((uint32_t)ESP.getEfuseMac());
-      pTxCharacteristic->notify();
-      Serial.println(chipId);
+      if (i == 20 || i == 24)
+        continue;
+      digitalWrite(i, LOW);
+    }
+    digitalWrite(32, LOW);
+    while (pbCounter == 0)
+    {
+      delay(10);
+
     }
   }
-  // disconnecting
-  if (!deviceConnected && oldDeviceConnected)
+  // ModeSwitch();
+  /*********************待机模式**************************/
+
+  /*********************照明模式**************************/
+  if (pbCounter == 1)
   {
-    delay(500);                  // give the bluetooth stack the chance to get things ready
-    pServer->startAdvertising(); // restart advertising
-    Serial.println("start advertising");
-    oldDeviceConnected = deviceConnected;
+    for (int i = 12; i <= 27; i++)
+    {
+      if (i == 20 || i == 24)
+        continue;
+      digitalWrite(i, HIGH);
+    }
+    digitalWrite(32, HIGH); //点亮全部led
+
+    while (pbCounter == 1)
+    {
+      delay(10);
+
+    }
+    // ModeSwitch();              //不断扫描模式信号
   }
-  // connecting
-  if (deviceConnected && !oldDeviceConnected)
+  /*********************照明模式**************************/
+
+  /*********************流水模式**************************/
+  if (pbCounter == 2)
   {
-    // do stuff here on connecting
-    oldDeviceConnected = deviceConnected;
+    // int dt=0;
+    // int pastt=millis();
+    for (int i = 12; i <= 27; i++)
+    {
+      if (i == 20 || i == 24)
+        continue;
+      digitalWrite(i, LOW);
+    }
+    digitalWrite(32, LOW);
+
+    while (1)
+    {
+      for (int i = 12; i <= 27; i++)
+      {
+        if (i == 20 || i == 24)
+          continue;
+        digitalWrite(i, HIGH);
+        delay(70);
+        if (pbCounter != 2)
+          break;
+        digitalWrite(i, LOW);
+      }
+      if (pbCounter != 2)
+        break;
+
+      digitalWrite(32, HIGH);
+      delay(70);
+      if (pbCounter != 2)
+        break;
+      digitalWrite(32, LOW);
+      delay(10);
+
+    }
+
+    if (pbCounter != 2)
+    {
+      for (int i = 12; i <= 27; i++)
+      {
+        if (i == 20 || i == 24)
+          continue;
+        digitalWrite(i, LOW);
+      }
+      digitalWrite(32, LOW);
+    }
+    delay(10);
   }
+
 }
