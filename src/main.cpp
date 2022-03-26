@@ -36,6 +36,7 @@ String chipId;
 String readString;
 
 int pb = 4; // pushbutton
+int audio = 5;
 int rled1 = 12;
 int rled2 = 13;
 int rled3 = 14;
@@ -55,6 +56,7 @@ int bled4 = 27;
 int bled5 = 32;
 
 int pbCounter = 0;
+bool audio_high = false;
 
 // String chipId;
 //  See the following for generating UUIDs:
@@ -154,6 +156,11 @@ void ModeSwitch()
   attachInterrupt(pb, ModeSwitch, RISING);
 }
 
+void AudioHigh()
+{
+  audio_high = true;  
+}
+
 void setup()
 {
   Serial.begin(9600);
@@ -195,6 +202,7 @@ void setup()
   pinMode(pb, INPUT_PULLUP);
   attachInterrupt(pb, ModeSwitch, RISING); //中断——按键监听
 
+
   for (int i = 12; i <= 27; i++)
   {
     if (i == 20 || i == 24)
@@ -218,11 +226,28 @@ void loop()
       digitalWrite(i, LOW);
     }
     digitalWrite(32, LOW);
+
+    attachInterrupt(audio, AudioHigh, RISING);
     while (pbCounter == 0)
     {
       delay(10);
-
+      if (audio_high)
+      {
+        for (int i=0; i<30; i++)
+        {
+          if (pbCounter != 0)
+          {
+            Serial.println("Audio Low");
+            audio_high = 0;
+            break;
+          }
+          Serial.println("Audio High");
+          delay(1000);
+        }
+      }
     }
+
+    detachInterrupt(audio);
   }
   // ModeSwitch();
   /*********************待机模式**************************/
@@ -241,7 +266,6 @@ void loop()
     while (pbCounter == 1)
     {
       delay(10);
-
     }
     // ModeSwitch();              //不断扫描模式信号
   }
