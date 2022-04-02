@@ -36,7 +36,7 @@ String chipId;
 String readString;
 
 int pb = 4; // pushbutton
-int audio = 5;
+int audio = 33;
 int rled1 = 12;
 int rled2 = 13;
 int rled3 = 14;
@@ -147,13 +147,13 @@ class MyCallbacks : public BLECharacteristicCallbacks
 void ModeSwitch()
 {
   detachInterrupt(pb);
-  // while(digitalRead(pb) == HIGH);
-  Serial.println("OnePress");
+  (digitalRead(pb) == HIGH);
+  Serial.print("OnePress:");
   pbCounter++;
   pbCounter = pbCounter % 3;
   Serial.println(pbCounter);
-  delay(50); //冷却时间还需商榷
-  attachInterrupt(pb, ModeSwitch, RISING);
+  delay(100); //冷却时间还需商榷
+  attachInterrupt(pb, ModeSwitch, FALLING);
 }
 
 void AudioHigh()
@@ -200,7 +200,8 @@ void setup()
   Serial.println("Waiting a client connection to notify...");
 
   pinMode(pb, INPUT_PULLUP);
-  attachInterrupt(pb, ModeSwitch, RISING); //中断——按键监听
+  pinMode(audio, INPUT);
+  attachInterrupt(pb, ModeSwitch, FALLING); //中断——按键监听
 
 
   for (int i = 12; i <= 27; i++)
@@ -233,20 +234,44 @@ void loop()
       delay(10);
       if (audio_high)
       {
-        for (int i=0; i<30; i++)
+        for (int i = 12; i <= 27; i++)
+        {
+          if (i == 20 || i == 24)
+            continue;
+          digitalWrite(i, HIGH);
+        }
+        digitalWrite(32, HIGH); //点亮全部led
+
+        for (int j=0; j<30; j++)
         {
           if (pbCounter != 0)
           {
-            Serial.println("Audio Low");
+            for (int i = 12; i <= 27; i++)
+            {
+              if (i == 20 || i == 24)
+                continue;
+              digitalWrite(i, LOW);
+            }
+            digitalWrite(32, LOW);
+
+            //Serial.println("Audio Low");
             audio_high = 0;
             break;
           }
-          Serial.println("Audio High");
+          //Serial.println("Audio High");
           delay(1000);
         }
+        for (int i = 12; i <= 27; i++)
+        {
+          if (i == 20 || i == 24)
+            continue;
+          digitalWrite(i, LOW);
+        }
+        digitalWrite(32, LOW);
+        // Serial.println("Audio Low");
+        audio_high = 0;
       }
     }
-
     detachInterrupt(audio);
   }
   // ModeSwitch();
